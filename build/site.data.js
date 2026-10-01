@@ -29,6 +29,19 @@ const site = {
      POST entirely and always hand off to the mail client. */
   formEndpoint: '/api/contact',
 
+  /* ---- Floating WhatsApp button ----
+     Sits bottom right of every page, above the back-to-top button. Digits
+     only, with country code and no "+" — that is the format wa.me takes.
+     Blank the number or delete the block to drop the button site-wide.
+
+     Adding `message: '...'` prefills the visitor's first message. Left out
+     deliberately: a prefill puts words in their mouth, and it should be
+     wording the business chose. */
+  whatsapp: {
+    number: '14029010977',
+    label: 'Chat with us on WhatsApp'
+  },
+
   /* ---- Analytics and advertising tags ----
      Both load third-party scripts that set cookies and report the visit to
      Google and Meta. They fire on every page for every visitor, with no
