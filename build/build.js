@@ -52,7 +52,7 @@ const popup = () => {
         ${honeypot}
         <input type="text" name="name" required aria-label="Full name" autocomplete="name" placeholder="Full name *">
         <div class="modal__row">
-          <input type="tel"   name="phone"          aria-label="Phone number" autocomplete="tel"   placeholder="Phone">
+          <input type="tel"   name="phone" required aria-label="Phone number" autocomplete="tel"   placeholder="Phone *">
           <input type="email" name="email" required aria-label="Email address" autocomplete="email" placeholder="Email address *">
         </div>
         <textarea name="message" rows="3" aria-label="About your book" placeholder="Tell us briefly about your project — where the book is now, and what it needs."></textarea>
@@ -275,7 +275,7 @@ const leadBand = (title, lede) => `
         <div class="lead-form__row">
           <input type="text"  name="name"  required aria-label="Your name"     autocomplete="name"  placeholder="Your name">
           <input type="email" name="email" required aria-label="Email address" autocomplete="email" placeholder="Email address">
-          <input type="tel"   name="phone"          aria-label="Phone number (optional)" autocomplete="tel" placeholder="Phone (optional)">
+          <input type="tel"   name="phone" required     aria-label="Phone number" autocomplete="tel" placeholder="Phone">
           <button class="btn btn--solid" type="submit">Let&rsquo;s start ${icon('arrow')}</button>
         </div>
         <p class="lead-form__note">No obligation, and no sales call unless you ask for one. We reply within one business day.</p>
@@ -1222,8 +1222,8 @@ const contactPage = () => {
 
       <div class="field-row">
         <div class="field">
-          <label for="phone">Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
-          <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="+1 555 000 0000">
+          <label for="phone">Phone</label>
+          <input type="tel" id="phone" name="phone" required autocomplete="tel" placeholder="+1 555 000 0000">
         </div>
         <div class="field">
           <label for="service">Service</label>

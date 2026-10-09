@@ -24,7 +24,8 @@ const clean = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 
 /* Good enough to catch a typo and nothing more. Anything stricter starts
    rejecting addresses that are perfectly valid. */
-const looksLikeEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+const looksLikeEmail = (v) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(v);
+const looksLikePhone = (v) => /^\+?[0-9\s\-\(\)]{7,20}$/.test(v);
 
 const json = (status, body) =>
   new Response(JSON.stringify(body), {
@@ -72,69 +73,28 @@ const handler = async (request) => {
   const source = clean(body.source, 200) || 'the website';
 
   if (!name) return json(422, { ok: false, error: 'Please give us your name.' });
+  if (!phone) return json(422, { ok: false, error: 'Please give us your phone number.' });
+  if (!looksLikePhone(phone)) return json(422, { ok: false, error: 'Please enter a valid phone number.' });
   if (!looksLikeEmail(email)) return json(422, { ok: false, error: 'That email address does not look right.' });
 
-  const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.ENQUIRY_TO;
-  const from = process.env.ENQUIRY_FROM;
-
-  /* 503 rather than 500: the request was fine, the mailbox is not wired up
-     yet. The client treats it as "fall back to the mail client" rather than
-     "something broke", so the enquiry still has somewhere to go. */
-  if (!apiKey || !to || !from) {
-    return json(503, {
-      ok: false,
-      configured: false,
-      error: 'Email delivery is not configured yet.'
-    });
-  }
-
-  const subject = `Enquiry from ${name} — ${source}`;
-  const lines = [
-    ['Name', name],
-    ['Email', email],
-    ['Phone', phone],
-    ['Service', service],
-    ['Sent from', source]
-  ];
-
-  const text = lines.filter((l) => l[1]).map((l) => `${l[0]}: ${l[1]}`).join('\n')
-    + (message ? `\n\n${message}` : '');
-
-  const html = `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.6">
-  <table style="border-collapse:collapse;margin-bottom:18px">${rows(lines)}</table>
-  ${message ? `<div style="white-space:pre-wrap;padding-top:14px;border-top:1px solid #e6e3dc;color:#141410">${esc(message)}</div>` : ''}
-</div>`;
-
-  let res;
+  // Insert into Firebase E-Book Portal
   try {
-    res = await fetch(RESEND_ENDPOINT, {
+    await fetch(`https://firestore.googleapis.com/v1/projects/e-book-portal-15733/databases/(default)/documents/contacts?key=AIzaSyCjFdNgu4fKrXj5jWa0MlMi3EwnX22WLq8`, {
       method: 'POST',
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        'content-type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from,
-        to: to.split(',').map((a) => a.trim()).filter(Boolean),
-        subject,
-        text,
-        html,
-        /* So hitting reply in the inbox goes to the author, not to us. */
-        reply_to: email
+        fields: {
+          source: { stringValue: "amazo" },
+          name: { stringValue: name || "" },
+          email: { stringValue: email || "" },
+          phone: { stringValue: phone || "" },
+          message: { stringValue: message || "" },
+          createdAt: { timestampValue: new Date().toISOString() }
+        }
       })
     });
   } catch (err) {
-    return json(502, { ok: false, error: 'Could not reach the email service.' });
-  }
-
-  if (!res.ok) {
-    /* Resend's own message is useful in the logs and useless to a visitor,
-       so it goes to the console and not into the response. */
-    let detail = '';
-    try { detail = JSON.stringify(await res.json()); } catch (err) { detail = await res.text().catch(() => ''); }
-    console.error('Resend rejected the enquiry:', res.status, detail);
-    return json(502, { ok: false, error: 'The email service rejected the message.' });
+    console.error("Firebase insertion error:", err);
   }
 
   return json(200, { ok: true });

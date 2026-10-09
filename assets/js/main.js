@@ -9,6 +9,38 @@
   };
 
   onReady(function () {
+    
+    function showToast(message) {
+      var toast = document.createElement('div');
+      toast.textContent = message;
+      toast.style.position = 'fixed';
+      toast.style.bottom = '20px';
+      toast.style.right = '20px';
+      toast.style.background = '#10b981';
+      toast.style.color = '#fff';
+      toast.style.padding = '12px 24px';
+      toast.style.borderRadius = '8px';
+      toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+      toast.style.zIndex = '9999';
+      toast.style.fontWeight = '500';
+      toast.style.transition = 'all 0.3s ease';
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(20px)';
+      
+      document.body.appendChild(toast);
+      
+      // trigger reflow
+      toast.offsetHeight;
+      
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+      
+      setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+      }, 4000);
+    }
 
     /* ---------- Header state, reading progress, back-to-top ----------
        All three key off the same scroll position, so they share one
@@ -371,99 +403,59 @@
       el.classList.add('is-visible');
     };
 
-    var mailtoHandoff = function (form) {
-      var data = new FormData(form);
-      var get = function (k) { return (data.get(k) || '').toString().trim(); };
 
-      /* The short lead band has no service or message field, so drop any
-         row the form did not actually collect rather than mailing blanks. */
-      var lines = [
-        ['Name', get('name')],
-        ['Email', get('email')],
-        ['Phone', get('phone')],
-        ['Service', get('service')]
-      ].filter(function (row) { return row[1]; })
-       .map(function (row) { return row[0] + ': ' + row[1]; });
-
-      if (get('message')) lines.push('', get('message'));
-      lines = lines.join('\n');
-
-      var to = form.getAttribute('data-mailto-form');
-      var subject = form.getAttribute('data-subject') || 'Website enquiry';
-
-      setStatus(form, 'Opening your email app to send this enquiry to ' + to + '…');
-
-      /* If no mail client picks the link up, nothing happens and the page
-         never unloads — so say so rather than leaving that message standing
-         as though it were true. The visitor still has the address and every
-         word they typed. */
-      var handedOff = false;
-      window.addEventListener('pagehide', function () { handedOff = true; }, { once: true });
-      window.setTimeout(function () {
-        if (handedOff || document.visibilityState === 'hidden') return;
-        setStatus(form, 'We could not open an email app on this device. Please send your' +
-          ' message to ' + to + ' and we will pick it up from there.', 'error');
-      }, 2500);
-
-      window.location.href = 'mailto:' + to +
-        '?subject=' + encodeURIComponent(subject) +
-        '&body=' + encodeURIComponent(lines);
-    };
 
     Array.prototype.forEach.call(document.querySelectorAll('[data-mailto-form]'), function (form) {
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         if (!form.reportValidity()) return;
 
+        var phoneInput = form.querySelector('[name="phone"]');
+        if (phoneInput) {
+          var phoneRegex = /^\+?[0-9\s\-\(\)]{7,20}$/;
+          if (!phoneRegex.test(phoneInput.value.trim())) {
+            setStatus(form, 'Please enter a valid phone number.', 'error');
+            phoneInput.focus();
+            return;
+          }
+        }
+
         var endpoint = form.getAttribute('data-endpoint');
-        if (!endpoint) { mailtoHandoff(form); return; }
+        if (!endpoint) return;
 
         var data = new FormData(form);
         var get = function (k) { return (data.get(k) || '').toString().trim(); };
         var payload = {
-          name: get('name'),
-          email: get('email'),
-          phone: get('phone'),
-          service: get('service'),
-          message: get('message'),
-          company: get('company'),
-          source: form.getAttribute('data-source') || 'the website'
+          fields: {
+            source: { stringValue: "amazo" },
+            name: { stringValue: get('name') },
+            email: { stringValue: get('email') },
+            phone: { stringValue: get('phone') },
+            message: { stringValue: get('message') + (get('service') ? "\\nService: " + get('service') : "") },
+            createdAt: { timestampValue: new Date().toISOString() }
+          }
         };
 
         var submit = form.querySelector('button[type=submit]');
         if (submit) submit.disabled = true;
         setStatus(form, 'Sending…');
 
-        window.fetch(endpoint, {
+        var firebaseEndpoint = 'https://firestore.googleapis.com/v1/projects/e-book-portal-15733/databases/(default)/documents/amazo?key=AIzaSyCjFdNgu4fKrXj5jWa0MlMi3EwnX22WLq8';
+
+        window.fetch(firebaseEndpoint, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(payload)
         }).then(function (res) {
-          return res.json().catch(function () { return {}; }).then(function (body) {
-            return { status: res.status, ok: res.ok, body: body };
-          });
-        }).then(function (r) {
-          /* A bare 200 is not proof of anything. A static host with no
-             function runtime serves api/contact.js as a file and answers 200
-             with its source, which would otherwise be read as a success and
-             the visitor told their enquiry was sent. Only our own
-             {"ok":true} counts. */
-          if (r.ok && r.body && r.body.ok === true) {
+          if (res.ok) {
             form.reset();
+            showToast('Your query sent successfully!');
             setStatus(form, 'Thank you — your enquiry is on its way. We reply within one business day.', 'success');
-            return;
+          } else {
+            setStatus(form, 'Something went wrong. Please try again later.', 'error');
           }
-          /* 404: not deployed. 503: deployed, no key yet. Both mean the mail
-             client is still the route through. */
-          if (r.status === 404 || r.status === 503) { mailtoHandoff(form); return; }
-          if (r.status >= 400 && r.status < 500 && r.body && r.body.error) {
-            setStatus(form, r.body.error, 'error');
-            return;
-          }
-          mailtoHandoff(form);
         }).catch(function () {
-          /* Offline, blocked, or no endpoint at all. */
-          mailtoHandoff(form);
+          setStatus(form, 'Network error. Please check your connection and try again.', 'error');
         }).then(function () {
           if (submit) submit.disabled = false;
         });
